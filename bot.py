@@ -4,38 +4,32 @@ import asyncio
 import time
 import discord
 from discord import app_commands
-from discord.ext import commands, tasks # Tambahan 'tasks' untuk timer harian
+from discord.ext import commands, tasks
 import requests
-import streamlit as st
 from duckduckgo_search import DDGS
 from typing import Optional
+from dotenv import load_dotenv # Tambahan untuk baca .env
+
+# Load file .env
+load_dotenv()
 
 # ---------------------------------------------------------
-# 1. Streamlit Dashboard Setup
+# 1. Token & API Configuration
 # ---------------------------------------------------------
-st.set_page_config(page_title="Discord Bot - Palestine Server", page_icon="🇵🇸")
-st.title("🇵🇸 AI Assistant - 24/7 Virtual Assistant (Groq Engine)")
-st.success("🟢 Palestine Server Bot Active!")
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# ---------------------------------------------------------
-# 2. Token & API Configuration
-# ---------------------------------------------------------
-DISCORD_TOKEN = (
-    os.getenv("DISCORD_TOKEN_PERSONA") 
-    or st.secrets.get("DISCORD_TOKEN_PERSONA") 
-    or os.getenv("DISCORD_TOKEN") 
-    or st.secrets.get("DISCORD_TOKEN")
-)
-GROQ_API_KEY = (
-    os.getenv("GROQ_API_KEY_PERSONA") 
-    or st.secrets.get("GROQ_API_KEY_PERSONA") 
-    or os.getenv("GROQ_API_KEY") 
-    or st.secrets.get("GROQ_API_KEY")
-)
+if not DISCORD_TOKEN or not GROQ_API_KEY:
+    print("❌ ERROR: Token Discord atau API Key Groq belum dimasukkan di file .env!")
+    exit()
 
 # ⚠️ GANTI ANGKA INI DENGAN ID CHANNEL UNTUK DAILY REMINDER!
-DAILY_CHANNEL_ID = 1514813322216865993 
+DAILY_CHANNEL_ID = 1234567890123456789 
 
+# ---------------------------------------------------------
+# Sisa kode ke bawah (Model Routing, Helper Functions, dll) 
+# SAMA PERSIS SEPERTI SEBELUMNYA. NGGAK ADA YANG PERLU DIUBAH.
+# ---------------------------------------------------------
 # 3-Model Routing Strategy
 MODEL_HEAVY = "openai/gpt-oss-120b"          # Deep Analysis Mode
 MODEL_LIGHT = "llama-3.3-70b-versatile"         # Fast / Daily Chat Mode
