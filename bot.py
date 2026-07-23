@@ -4,7 +4,7 @@ import asyncio
 import time
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks # Tambahan 'tasks' untuk timer harian
 import requests
 import streamlit as st
 from duckduckgo_search import DDGS
@@ -33,6 +33,9 @@ GROQ_API_KEY = (
     or st.secrets.get("GROQ_API_KEY")
 )
 
+# ⚠️ GANTI ANGKA INI DENGAN ID CHANNEL UNTUK DAILY REMINDER!
+DAILY_CHANNEL_ID = 1234567890123456789 
+
 # 3-Model Routing Strategy
 MODEL_HEAVY = "openai/gpt-oss-120b"          # Deep Analysis Mode
 MODEL_LIGHT = "llama-3.1-8b-instant"         # Fast / Daily Chat Mode
@@ -42,7 +45,7 @@ SYSTEM_PROMPT_BOT = """
 You are the official virtual assistant for the "Palestine" Discord server.
 Response guidelines:
 - Speak strictly in polite, educated, and friendly English.
-- Answer all questions factually. If discussing humanitarian topics, history, or current events, respond with empathy, objectivity, and informative detail.
+- Answer all questions factually. If discussing humanitarian topics, history, Islam, or current events, respond with empathy, objectivity, and authentic informative detail.
 - Strictly NO harsh, inappropriate, NSFW, or explicit language.
 - Use a natural and professional tone—neither too stiff nor overly casual/slangy.
 - Keep answers clear, concise, and honest.
@@ -113,15 +116,42 @@ async def send_long_message(target, text, mode="reply"):
                 await target.channel.send(chunk)
         elif mode == "slash":
             await target.followup.send(chunk)
+        elif mode == "channel": # Tambahan mode untuk ngirim pesan harian
+            await target.send(chunk)
 
 # ---------------------------------------------------------
-# 4. Discord Bot Initialization & Events
+# 4. Discord Bot Initialization & Daily Task
 # ---------------------------------------------------------
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True  # Required for Welcome System
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# --- FITUR BARU: AUTO DAILY ISLAMIC REMINDER ---
+@tasks.loop(hours=24) # Berjalan otomatis setiap 24 jam
+async def daily_islamic_reminder():
+    channel = bot.get_channel(DAILY_CHANNEL_ID)
+    if channel:
+        print("⏳ Generating Daily Islamic Content...")
+        daily_prompt = (
+            "Generate a beautiful daily Islamic message for a Discord server. It MUST contain:\n"
+            "1. 📖 **Daily Quranic Ayah**: One authentic Ayah in English with its Surah/Verse reference.\n"
+            "2. 📜 **Daily Hadith**: One authentic Hadith in English with its reference (e.g., Sahih Bukhari, Muslim).\n"
+            "3. ❓ **Daily Trivia Question**: One engaging Islamic trivia question to test the community's knowledge.\n\n"
+            "Format the output using Discord markdown, use appropriate emojis, and make it look clean and inspiring. Do not include the answers to the trivia immediately."
+        )
+        
+        daily_content = await asyncio.to_thread(ask_groq, daily_prompt, MODEL_HEAVY)
+        await send_long_message(channel, daily_content, mode="channel")
+        print("✅ Daily Islamic Content sent successfully!")
+
+@daily_islamic_reminder.before_loop
+async def before_daily_reminder():
+    await bot.wait_until_ready()
+
+# ---------------------------------------------------------
+# 5. Discord Events (On Ready & On Message)
+# ---------------------------------------------------------
 @bot.event
 async def on_ready():
     try:
@@ -132,6 +162,10 @@ async def on_ready():
         
     await bot.change_presence(activity=discord.Game(name="Protecting Palestine Server 🇵🇸 | /chat"))
     print(f"✅ Bot ({bot.user}) is Online!")
+    
+    # Jalankan timer harian jika belum jalan
+    if not daily_islamic_reminder.is_running():
+        daily_islamic_reminder.start()
 
 @bot.event
 async def on_member_join(member):
@@ -190,9 +224,8 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ---------------------------------------------------------
-# 5. Slash Commands
+# 6. Slash Commands
 # ---------------------------------------------------------
-
 @bot.tree.command(name="chat", description="Chat or ask anything to the AI assistant. 🇵🇸")
 @app_commands.describe(
     message="Your message or question for the AI",
