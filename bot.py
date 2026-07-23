@@ -34,12 +34,12 @@ GROQ_API_KEY = (
 )
 
 # ⚠️ GANTI ANGKA INI DENGAN ID CHANNEL UNTUK DAILY REMINDER!
-DAILY_CHANNEL_ID = 1234567890123456789 
+DAILY_CHANNEL_ID = 1514813322216865993 
 
 # 3-Model Routing Strategy
 MODEL_HEAVY = "openai/gpt-oss-120b"          # Deep Analysis Mode
-MODEL_LIGHT = "llama-3.1-8b-instant"         # Fast / Daily Chat Mode
-MODEL_FALLBACK = "llama-3.3-70b-versatile"   # Emergency Fallback
+MODEL_LIGHT = "llama-3.3-70b-versatile"         # Fast / Daily Chat Mode
+MODEL_FALLBACK = "llama-3.1-8b-instant"   # Emergency Fallback
 
 SYSTEM_PROMPT_BOT = """
 You are the official virtual assistant for the "Palestine" Discord server.
