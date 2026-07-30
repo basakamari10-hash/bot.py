@@ -5,7 +5,7 @@ import time
 import requests
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from duckduckgo_search import DDGS
 from typing import Optional
 from dotenv import load_dotenv
@@ -18,6 +18,7 @@ load_dotenv()
 # ---------------------------------------------------------
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+STREAMLIT_URL = os.getenv("STREAMLIT_URL", "https://nama-app-kamu.streamlit.app")
 
 if not DISCORD_TOKEN or not GROQ_API_KEY:
     print("❌ ERROR: Token Discord atau API Key Groq belum dimasukkan di file .env!")
@@ -121,12 +122,29 @@ async def send_long_message(target, text, mode="reply"):
             await target.followup.send(chunk)
 
 # ---------------------------------------------------------
-# 4. Discord Bot Initialization & Events
+# 4. Discord Bot Initialization & Background Tasks
 # ---------------------------------------------------------
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# --- TASK LOOP: AUTO KEEP-ALIVE UNTUK STREAMLIT (SETIAP 2 JAM) ---
+@tasks.loop(hours=2)
+async def keep_alive_ping():
+    if STREAMLIT_URL and "streamlit.app" in STREAMLIT_URL:
+        try:
+            res = await asyncio.to_thread(requests.get, STREAMLIT_URL, timeout=15)
+            print(f"⏰ [Keep-Alive] Ping ke Streamlit ({STREAMLIT_URL}) berhasil! Status Code: {res.status_code}")
+        except Exception as e:
+            print(f"⚠️ [Keep-Alive] Gagal melakukan ping ke Streamlit: {e}")
+
+@keep_alive_ping.before_loop
+async def before_keep_alive():
+    await bot.wait_until_ready()
+
+# ---------------------------------------------------------
+# 5. Discord Events
+# ---------------------------------------------------------
 @bot.event
 async def on_ready():
     try:
@@ -137,6 +155,11 @@ async def on_ready():
         
     await bot.change_presence(activity=discord.Game(name="shuna.ai ✨💕 | /chat"))
     print(f"✅ shuna.ai ({bot.user}) is Online and ready to help!")
+
+    # Jalankan loop ping otomatis setiap 2 jam jika belum aktif
+    if not keep_alive_ping.is_running():
+        keep_alive_ping.start()
+        print("🚀 Auto Keep-Alive Streamlit task started (Runs every 2 hours)!")
 
 @bot.event
 async def on_message(message):
@@ -178,7 +201,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ---------------------------------------------------------
-# 5. Slash Commands
+# 6. Slash Commands
 # ---------------------------------------------------------
 @bot.tree.command(name="chat", description="Ngobrol atau tanya apa saja ke shuna.ai! ✨💕")
 @app_commands.describe(
@@ -245,7 +268,8 @@ async def slash_test(interaction: discord.Interaction):
         f"🟢 **Groq API Status:** Connected & Active 💕\n"
         f"⚡ **API Latency:** `{api_latency}ms`\n"
         f"📡 **Discord Ping:** `{discord_ping}ms`\n"
-        f"🧠 **Active Models:** 3-Tier (`openai/gpt-oss-120b` | `llama-3.1-8b-instant` | `llama-3.3-70b-versatile`)\n\n"
+        f"🧠 **Active Models:** 3-Tier (`openai/gpt-oss-120b` | `llama-3.1-8b-instant` | `llama-3.3-70b-versatile`)\n"
+        f"⏰ **Streamlit Keep-Alive:** Active (`{STREAMLIT_URL}`)\n\n"
         f"💬 **Respon shuna.ai:**\n> {respon}"
     )
     await interaction.followup.send(status_msg)
