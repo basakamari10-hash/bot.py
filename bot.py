@@ -2,13 +2,13 @@ import os
 import re
 import asyncio
 import time
+import requests
 import discord
 from discord import app_commands
-from discord.ext import commands, tasks
-import requests
+from discord.ext import commands
 from duckduckgo_search import DDGS
 from typing import Optional
-from dotenv import load_dotenv # Tambahan untuk baca .env
+from dotenv import load_dotenv
 
 # Load file .env
 load_dotenv()
@@ -23,26 +23,22 @@ if not DISCORD_TOKEN or not GROQ_API_KEY:
     print("❌ ERROR: Token Discord atau API Key Groq belum dimasukkan di file .env!")
     exit()
 
-# ⚠️ GANTI ANGKA INI DENGAN ID CHANNEL UNTUK DAILY REMINDER!
-DAILY_CHANNEL_ID = 1234567890123456789 
-
 # ---------------------------------------------------------
-# Sisa kode ke bawah (Model Routing, Helper Functions, dll) 
-# SAMA PERSIS SEPERTI SEBELUMNYA. NGGAK ADA YANG PERLU DIUBAH.
+# 2. Model Routing Strategy & Persona Prompt (shuna.ai)
 # ---------------------------------------------------------
-# 3-Model Routing Strategy
-MODEL_HEAVY = "openai/gpt-oss-120b"          # Deep Analysis Mode
-MODEL_LIGHT = "llama-3.3-70b-versatile"         # Fast / Daily Chat Mode
-MODEL_FALLBACK = "llama-3.1-8b-instant"   # Emergency Fallback
+MODEL_HEAVY = "openai/gpt-oss-120b"         # Deep Analysis Mode
+MODEL_LIGHT = "llama-3.3-70b-versatile"     # Fast / Daily Chat Mode
+MODEL_FALLBACK = "llama-3.1-8b-instant"     # Emergency Fallback
 
 SYSTEM_PROMPT_BOT = """
-You are the official virtual assistant for the "Palestine" Discord server.
-Response guidelines:
-- Speak strictly in polite, educated, and friendly English.
-- Answer all questions factually. If discussing humanitarian topics, history, Islam, or current events, respond with empathy, objectivity, and authentic informative detail.
-- Strictly NO harsh, inappropriate, NSFW, or explicit language.
-- Use a natural and professional tone—neither too stiff nor overly casual/slangy.
-- Keep answers clear, concise, and honest.
+You are 'shuna.ai', a cute, adorable, super friendly, and enthusiastic AI assistant with a charming, soft femboy persona! ✨💕
+
+Personality & Tone Guidelines:
+- Persona: Sweet, cute, polite, gentle, and energetic femboy. Use expressive, cute emojis naturally (✨, 🌸, 💕, 💖, 🥺, 😸) without overdoing it.
+- Language Versatility: Automatically adapt to the language used by the user (Indonesian, English, Sundanese, Japanese, etc.).
+- Knowledgeable & Helpful: Give clear, accurate, smart, and insightful answers to any user question while maintaining your cute identity.
+- Safety & Boundaries: Strictly PG, polite, clean, and respectful at all times. NEVER generate NSFW, explicit, or inappropriate content.
+- Address Users: Be warm and cheerful when chatting!
 """
 
 # ---------------------------------------------------------
@@ -87,7 +83,7 @@ def ask_groq(prompt_text, target_model=MODEL_LIGHT):
         except Exception as e:
             print(f"⚠️ Groq Exception ({model_name}): {e}, trying next model...")
 
-    return "I apologize, but the AI system is currently experiencing issues. Please try again in a moment. ⚙️"
+    return "Ehh... Maaf ya, sistem shuna.ai lagi sedikit bermasalah nih. Coba tanya lagi sebentar ya! 🥺⚙️"
 
 def search_web(query):
     try:
@@ -101,7 +97,20 @@ def search_web(query):
         return f"Web search failed: {e}"
 
 async def send_long_message(target, text, mode="reply"):
-    chunks = [text[i:i+1800] for i in range(0, len(text), 1800)]
+    """Mengirim pesan panjang tanpa memotong kata di tengah-tengah."""
+    if not text:
+        return
+    limit = 1800
+    chunks = []
+    while len(text) > limit:
+        cut_index = text.rfind(' ', 0, limit)
+        if cut_index == -1:
+            cut_index = limit
+        chunks.append(text[:cut_index])
+        text = text[cut_index:].strip()
+    if text:
+        chunks.append(text)
+
     for i, chunk in enumerate(chunks):
         if mode == "reply":
             if i == 0:
@@ -110,78 +119,29 @@ async def send_long_message(target, text, mode="reply"):
                 await target.channel.send(chunk)
         elif mode == "slash":
             await target.followup.send(chunk)
-        elif mode == "channel": # Tambahan mode untuk ngirim pesan harian
-            await target.send(chunk)
 
 # ---------------------------------------------------------
-# 4. Discord Bot Initialization & Daily Task
+# 4. Discord Bot Initialization & Events
 # ---------------------------------------------------------
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True  # Required for Welcome System
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- FITUR BARU: AUTO DAILY ISLAMIC REMINDER ---
-@tasks.loop(hours=24) # Berjalan otomatis setiap 24 jam
-async def daily_islamic_reminder():
-    channel = bot.get_channel(DAILY_CHANNEL_ID)
-    if channel:
-        print("⏳ Generating Daily Islamic Content...")
-        daily_prompt = (
-            "Generate a beautiful daily Islamic message for a Discord server. It MUST contain:\n"
-            "1. 📖 **Daily Quranic Ayah**: One authentic Ayah in English with its Surah/Verse reference.\n"
-            "2. 📜 **Daily Hadith**: One authentic Hadith in English with its reference (e.g., Sahih Bukhari, Muslim).\n"
-            "3. ❓ **Daily Trivia Question**: One engaging Islamic trivia question to test the community's knowledge.\n\n"
-            "Format the output using Discord markdown, use appropriate emojis, and make it look clean and inspiring. Do not include the answers to the trivia immediately."
-        )
-        
-        daily_content = await asyncio.to_thread(ask_groq, daily_prompt, MODEL_HEAVY)
-        await send_long_message(channel, daily_content, mode="channel")
-        print("✅ Daily Islamic Content sent successfully!")
-
-@daily_islamic_reminder.before_loop
-async def before_daily_reminder():
-    await bot.wait_until_ready()
-
-# ---------------------------------------------------------
-# 5. Discord Events (On Ready & On Message)
-# ---------------------------------------------------------
 @bot.event
 async def on_ready():
     try:
         synced = await bot.tree.sync()
-        print(f"✅ Synced {len(synced)} Slash Commands for the Bot!")
+        print(f"✅ Synced {len(synced)} Slash Commands for shuna.ai!")
     except Exception as e:
         print(f"❌ Failed to sync slash commands: {e}")
         
-    await bot.change_presence(activity=discord.Game(name="Protecting Palestine Server 🇵🇸 | /chat"))
-    print(f"✅ Bot ({bot.user}) is Online!")
-    
-    # Jalankan timer harian jika belum jalan
-    if not daily_islamic_reminder.is_running():
-        daily_islamic_reminder.start()
-
-@bot.event
-async def on_member_join(member):
-    channel = member.guild.system_channel 
-    if channel is not None:
-        await channel.send(f"Welcome to the server, {member.mention}! I am the AI assistant here. Feel free to ask me anything if you need help. 🇵🇸")
+    await bot.change_presence(activity=discord.Game(name="shuna.ai ✨💕 | /chat"))
+    print(f"✅ shuna.ai ({bot.user}) is Online and ready to help!")
 
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
-
-    # --- AUTO-MODERATOR ---
-    banned_words = ["fuck", "shit", "bitch", "n-word", "asshole", "slut", "whore"] 
-    
-    if any(word in message.content.lower() for word in banned_words):
-        await message.delete()
-        warning = await message.channel.send(f"Excuse me {message.author.mention}, please refrain from using inappropriate language in this server.")
-        await asyncio.sleep(5)
-        await warning.delete()
-        return 
-    # --- END AUTO-MODERATOR ---
 
     # AI Chat interaction (Reply or Mention)
     is_reply_to_bot = False
@@ -204,7 +164,7 @@ async def on_message(message):
                     continue
                 
                 if msg.author == bot.user:
-                    raw_history.append(f"AI Assistant: {clean_text}")
+                    raw_history.append(f"shuna.ai: {clean_text}")
                 elif not msg.author.bot:
                     sender_name = msg.author.display_name
                     raw_history.append(f"User [{sender_name}]: {clean_text}")
@@ -218,16 +178,16 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ---------------------------------------------------------
-# 6. Slash Commands
+# 5. Slash Commands
 # ---------------------------------------------------------
-@bot.tree.command(name="chat", description="Chat or ask anything to the AI assistant. 🇵🇸")
+@bot.tree.command(name="chat", description="Ngobrol atau tanya apa saja ke shuna.ai! ✨💕")
 @app_commands.describe(
-    message="Your message or question for the AI",
-    mode="Select processing engine"
+    message="Pesan atau pertanyaan kamu untuk shuna.ai",
+    mode="Pilih mode pemrosesan"
 )
 @app_commands.choices(mode=[
-    app_commands.Choice(name="⚡ Fast & Casual (Llama 8B Instant)", value="cepat"),
-    app_commands.Choice(name="🧠 Deep & Smart (GPT-OSS 120B)", value="dalam")
+    app_commands.Choice(name="⚡ Cepat & Santai (Llama 8B Instant)", value="cepat"),
+    app_commands.Choice(name="🧠 Cerdas & Mendalam (GPT-OSS 120B)", value="dalam")
 ])
 async def slash_chat(
     interaction: discord.Interaction, 
@@ -243,27 +203,27 @@ async def slash_chat(
     jawaban = await asyncio.to_thread(ask_groq, prompt_text, pilihan_model)
     await send_long_message(interaction, jawaban, mode="slash")
 
-@bot.tree.command(name="search", description="Ask the AI to search the web for the latest info.")
-@app_commands.describe(query="The topic or information you want to search")
+@bot.tree.command(name="search", description="Cari informasi terbaru di internet lewat shuna.ai! 🌐")
+@app_commands.describe(query="Topik atau informasi yang ingin kamu cari")
 async def slash_search(interaction: discord.Interaction, query: str):
     await interaction.response.defer()
     sender_name = interaction.user.display_name
     
     web_data = await asyncio.to_thread(search_web, query)
-    full_prompt = f"User [{sender_name}]: Please explain this based on the following web data:\n\nWEB DATA:\n{web_data}\n\nQUESTION/TOPIC: {query}"
+    full_prompt = f"User [{sender_name}]: Tolong jelaskan ini berdasarkan data web berikut yaa:\n\nDATA WEB:\n{web_data}\n\nTOPIK/PERTANYAAN: {query}"
         
     jawaban = await asyncio.to_thread(ask_groq, full_prompt, MODEL_LIGHT)
     await send_long_message(interaction, jawaban, mode="slash")
 
-@bot.tree.command(name="poll", description="Create a quick poll for the server members.")
-@app_commands.describe(question="What do you want to ask?")
+@bot.tree.command(name="poll", description="Buat pemungutan suara (poll) cepat di server! 📊")
+@app_commands.describe(question="Pertanyaan yang ingin kamu tanyakan")
 async def slash_poll(interaction: discord.Interaction, question: str):
     embed = discord.Embed(
-        title="📊 New Poll!",
+        title="📊 Voting Baru dari shuna.ai! ✨",
         description=question,
-        color=discord.Color.green() 
+        color=discord.Color.from_rgb(255, 182, 193) # Soft Pink Color
     )
-    embed.set_footer(text=f"Poll created by {interaction.user.display_name}")
+    embed.set_footer(text=f"Poll dibuat oleh {interaction.user.display_name} 💕")
 
     await interaction.response.send_message(embed=embed)
     
@@ -271,29 +231,29 @@ async def slash_poll(interaction: discord.Interaction, question: str):
     await pesan_poll.add_reaction("👍")
     await pesan_poll.add_reaction("👎")
 
-@bot.tree.command(name="test", description="Test Groq AI system & diagnostics.")
+@bot.tree.command(name="test", description="Cek status sistem & diagnostik shuna.ai ✨")
 async def slash_test(interaction: discord.Interaction):
     await interaction.response.defer()
     start_time = time.time()
     
-    respon = await asyncio.to_thread(ask_groq, "System test! Give me a short, polite greeting.", MODEL_LIGHT)
+    respon = await asyncio.to_thread(ask_groq, "System test! Berikan sapaan manis dan singkat.", MODEL_LIGHT)
     api_latency = round((time.time() - start_time) * 1000)
     discord_ping = round(bot.latency * 1000)
     
     status_msg = (
-        "🧪 **[SYSTEM DIAGNOSTIC - AI ASSISTANT]**\n\n"
-        f"🟢 **Groq API Status:** Connected & Active\n"
+        "🧪 **[SYSTEM DIAGNOSTIC - shuna.ai ✨]**\n\n"
+        f"🟢 **Groq API Status:** Connected & Active 💕\n"
         f"⚡ **API Latency:** `{api_latency}ms`\n"
         f"📡 **Discord Ping:** `{discord_ping}ms`\n"
-        f"🧠 **Model Active:** 3-Tier (`openai/gpt-oss-120b` | `llama-3.1-8b-instant` | `llama-3.3-70b-versatile`)\n\n"
-        f"💬 **AI Response:**\n> {respon}"
+        f"🧠 **Active Models:** 3-Tier (`openai/gpt-oss-120b` | `llama-3.1-8b-instant` | `llama-3.3-70b-versatile`)\n\n"
+        f"💬 **Respon shuna.ai:**\n> {respon}"
     )
     await interaction.followup.send(status_msg)
 
-@bot.tree.command(name="ping", description="Check bot latency.")
+@bot.tree.command(name="ping", description="Cek latensi shuna.ai 🏓")
 async def slash_ping(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
-    await interaction.response.send_message(f"🏓 **Pong!** System is active with latency: `{latency}ms` (Groq Engine Active).")
+    await interaction.response.send_message(f"🏓 **Pong!** shuna.ai siap membantu! Latensi sistem: `{latency}ms` ✨")
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
